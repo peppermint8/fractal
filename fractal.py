@@ -275,11 +275,6 @@ def fractal(screen):
             sq_height = abs(s0[1] - s1[1])
             print("-- {} x {}".format(sq_width, sq_height))
 
-            #if bg0:
-            
-            #    screen.blit(bg0, (0, 0))
-            #    pygame.draw.rect(bg0, sq_color, [sx, sy, sq_width, sq_height], 2)
-            
             # set bg to copy
             bg.fill(background_color)
             if bg0:
@@ -288,7 +283,7 @@ def fractal(screen):
                 
             pygame.draw.rect(bg, sq_color, [sx0, sy0, sq_width, sq_height], 2)
             
-            # transparentcy not working
+            # transparentcy not working, wanted a semi-transparent selection square
             #pygame.draw.rect(bg, sq_color, [sx0, sy0, sq_width, sq_height])
             
             screen.blit(bg, (0,0))
@@ -301,9 +296,8 @@ def fractal(screen):
             bg.fill(background_color)
 
 
-
             if mflag:
-                # multiprocessing & threads
+                # use multiprocessing & threads
                 s = time.perf_counter()
 
                 p_list = []
@@ -314,7 +308,7 @@ def fractal(screen):
                     p_list.append(p)
 
                 # must be before join of multiprocess threads
-                #consumer(q, bg, 1)
+
                 t_list = []
                 for i in range(thread_max):
                     t = Thread(target=consumer, args=(q, bg, i))
@@ -344,9 +338,9 @@ def fractal(screen):
                         elif FRACTAL == "julia":
                             c = julia_px(x, y, xc, yc, fx_min, fy_min)
 
-                        #shade = c / MAX_CNT
+                        shade = c / MAX_CNT
                         #shade = 1 - math.sqrt(c / MAX_CNT)
-                        shade = math.sqrt(c / MAX_CNT)
+                        #shade = math.sqrt(c / MAX_CNT)
                         cc = int(shade * 255)
 
                         #px_color = (cc, 255-cc, cc) # green bg, pink
@@ -429,19 +423,14 @@ def fractal(screen):
             if event.type == QUIT:
                 done = True
             elif event.type == KEYDOWN:
-                if event.key == K_SPACE:
-                    mflag = not mflag
-                    redraw_flag = True
+
                 if event.key == K_s:
                     mflag = False
                     redraw_flag = True
                 if event.key == K_p:
                     mflag = True
                     redraw_flag = True
-                if event.key == K_c:
-                    pal_cnt += 5
-                    #palette = build_palette(pal_cnt)
-                    #screen.set_palette(palette)
+
                 if event.key == K_r:
                     # reset to original size
 
@@ -456,22 +445,9 @@ def fractal(screen):
                     xc = MAX_X / (fx_max - fx_min)
                     yc = MAX_Y / (fy_max - fy_min)
 
-                """
-                if event.key == K_UP:
-                    MAX_CNT += 10
-                    MAX_CNT = min(MAX_CNT, 500)
-                    print("max iteration: {}".format(MAX_CNT))
-                
-                if event.key == K_DOWN:
-                    MAX_CNT -= 10
-                    MAX_CNT = max(10, MAX_CNT)
-                    print("max iteration: {}".format(MAX_CNT))
-                """
-
 
                 if event.key == K_ESCAPE:
                     done = True
-
 
 
 if __name__ == '__main__':
@@ -481,4 +457,6 @@ if __name__ == '__main__':
 
     fractal(screen)
 
+    pygame.quit()
+    
     sys.exit(0)
