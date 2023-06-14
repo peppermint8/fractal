@@ -19,10 +19,16 @@ threads share memory, processes do not share memory
 - producers cannot access shared memory
 - multiprocess.queue must be used up to free multiprocess threads
 
+numpy test
+- vectorizing function doesn't help much - 17 sec vs 20 for the loop
+- colors using surfarray are odd - can we define what color maps to what value?
+- other numpy fractal examples use complex numbers - faster but 800k points?
+
 
 r = reset to normal coordinates
 s = redraw in normal mode
 p = redraw in threaded/multiprocessing mode
+n = use numpy
 
 use mouse selection to select area to zoom in, then click "s" or "p"
 
@@ -30,12 +36,18 @@ esc to exit
 
 Hide support msg
 $ export PYGAME_HIDE_SUPPORT_PROMPT=1
+
+julia ~ 18 sec
+no fractal ~ 2 sec
+
+
 """
 
 import sys
 import math
 import pygame
 import time
+import numpy as np
 from threading import Thread
 from multiprocessing import Process, Queue, cpu_count
 from pygame.locals import *
@@ -181,8 +193,9 @@ def consumer(q, bg, c):
         elif c % 3 == 2:
             px_color = (0, clr, clr)
         """
-        #bg.set_at((item[0], item[1]), px_color)
-        pygame.gfxdraw.pixel(bg, item[0], item[1], px_color)
+        if clr > 1:
+            bg.set_at((item[0], item[1]), px_color)
+        #pygame.gfxdraw.pixel(bg, item[0], item[1], px_color)
         if q.qsize() % 100_000 == 0 or q.qsize() < 11:
             print("<c{}> queue size: {}".format(c, q.qsize()))
             screen.blit(bg, (0, 0))
@@ -262,6 +275,16 @@ def fractal(screen):
 
     print("CPU cnt: {}".format(cpu_count()))
 
+    # vectorize fractal function
+    np_flag = False
+    fv = None
+    if FRACTAL == "mandelbrot":
+        fv = np.vectorize(mandelbrot_px)
+    elif FRACTAL == "julia":
+        fv = np.vectorize(julia_px)
+
+    
+
     while not done:
 
         loop_cnt += 1
@@ -329,35 +352,65 @@ def fractal(screen):
             
             else:            
                 # just normal processing
-                s = time.perf_counter()
-                for x in range(0, MAX_X):
-                    for y in range(0, MAX_Y):
-                        c = 32
-                        if FRACTAL == "mandelbrot":
-                            c = mandelbrot_px(x, y, xc, yc, fx_min, fy_min)
-                        elif FRACTAL == "julia":
-                            c = julia_px(x, y, xc, yc, fx_min, fy_min)
 
-                        shade = c / MAX_CNT
-                        #shade = 1 - math.sqrt(c / MAX_CNT)
-                        #shade = math.sqrt(c / MAX_CNT)
-                        cc = int(shade * 255)
+                if np_flag:
+                    print("numpy start")
+                    s = time.perf_counter()
 
-                        #px_color = (cc, 255-cc, cc) # green bg, pink
-                        px_color = (cc, cc, cc) # black & white
-                        #px_color = (255-cc, 255-cc, 255-cc) # white & black
+                    x = np.linspace(1, MAX_X, MAX_X)
+                    y = np.linspace(1, MAX_Y, MAX_Y)
+                    a = fv(x[:, np.newaxis], y, xc, yc, fx_min, fy_min)
+                    surf = pygame.surfarray.make_surface(a)
+                    bg.blit(surf, (0,0))
 
-                        # set_at = 15.63 sec
-                        #bg.set_at((x, y), px_color)
-                        pygame.gfxdraw.pixel(bg, x, y, px_color)                    
+                    print("numpy done: {:.2f} sec, {:,} pixels".format(time.perf_counter() - s, MAX_X * MAX_Y))
 
-                    # refresh every stripe
-                    if x % 100 == 0:
-                        screen.blit(bg, (0, 0))
-                        pygame.display.flip()
-                
 
-                print("done: {:.2f} sec, {:,} pixels".format(time.perf_counter() - s, MAX_X * MAX_Y))
+                else:
+                    print("loop start")
+                    s = time.perf_counter()
+                    a = np.zeros((MAX_X, MAX_Y))            
+                    for x in range(0, MAX_X):
+                        for y in range(0, MAX_Y):
+                            c = 32
+                            if FRACTAL == "mandelbrot":
+                                c = mandelbrot_px(x, y, xc, yc, fx_min, fy_min)
+                            elif FRACTAL == "julia":
+                                c = julia_px(x, y, xc, yc, fx_min, fy_min)
+
+                            shade = c / MAX_CNT
+                            #shade = 1 - math.sqrt(c / MAX_CNT)
+                            #shade = math.sqrt(c / MAX_CNT)
+                            cc = int(shade * 255)
+                            a[x][y] = cc
+                            """
+                            if cc > 1:
+                                #px_color = (cc, 255-cc, cc) # green bg, pink
+                                px_color = (cc, cc, cc) # black & white
+                                #px_color = (255-cc, 255-cc, 255-cc) # white & black
+
+                                # set_at = 15.63 sec
+                                #bg.set_at((x, y), px_color)
+                                pygame.gfxdraw.pixel(bg, x, y, px_color)                    
+                            """
+                    
+                        # refresh every stripe
+                        
+                        if x % 100 == 0:
+                            #screen.blit(bg, (0, 0))
+                            #pygame.display.flip()
+                            surf = pygame.surfarray.make_surface(a)        
+                            bg.blit(surf, (0,0))
+                            pygame.display.flip()
+
+                    surf = pygame.surfarray.make_surface(a)
+                    bg.blit(surf, (0,0))
+            
+
+                    #screen.blit(bg, (0, 0))
+                    #pygame.display.flip()                
+
+                    print("single thread loop done: {:.2f} sec, {:,} pixels".format(time.perf_counter() - s, MAX_X * MAX_Y))
 
 
             screen.blit(bg, (0, 0))
@@ -427,6 +480,11 @@ def fractal(screen):
                 if event.key == K_s:
                     mflag = False
                     redraw_flag = True
+                if event.key == K_n:
+                    # numpy
+                    mflag = False
+                    redraw_flag = True                    
+                    np_flag = not np_flag
                 if event.key == K_p:
                     mflag = True
                     redraw_flag = True
@@ -450,8 +508,65 @@ def fractal(screen):
                     done = True
 
 
+def peppermint():
+    """compare loop versus numpy"""
+     # julia
+    fx_min, fx_max = -1.5, 1.5
+    fy_min, fy_max = -1.5, 1.5
+        
+
+    xc = MAX_X / (fx_max - fx_min)
+    yc = MAX_Y / (fy_max - fy_min)
+
+    """
+    s = time.perf_counter()
+
+    
+
+    # 15.62 sec
+    a = np.zeros((MAX_X, MAX_Y))
+    for x in range(0, MAX_X):
+        for y in range(0, MAX_Y):
+            c = 32
+            if FRACTAL == "mandelbrot":
+                c = mandelbrot_px(x, y, xc, yc, fx_min, fy_min)
+            elif FRACTAL == "julia":
+                c = julia_px(x, y, xc, yc, fx_min, fy_min)
+
+            # set pixel x,y,c
+            a[x][y] = c
+
+    print(a)
+    print(a[300][300])
+    print("done: {:.2f} sec, {:,} pixels".format(time.perf_counter() - s, MAX_X * MAX_Y))
+    """
+    # a[300][300] = 5
+    s = time.perf_counter()
+    print("starting np")
+    #a = np.zeros((MAX_X, MAX_Y))
+    #x = np.linspace(fx_min, fx_max, MAX_X)
+    #y = np.linspace(fy_min, fy_max, MAX_Y)
+    x = np.linspace(1, MAX_X, MAX_X)
+    y = np.linspace(1, MAX_Y, MAX_Y)
+
+    #def julia_px(px, py, xc, yc, fx_min, fy_min):
+    if FRACTAL == "mandelbrot":
+        fv = np.vectorize(mandelbrot_px)
+    elif FRACTAL == "julia":
+        fv = np.vectorize(julia_px)
+
+    r = fv(x[:, np.newaxis], y, xc, yc, fx_min, fy_min)
+    print(r)
+    print(r[300][300])
+    print("done: {:.2f} sec, {:,} pixels".format(time.perf_counter() - s, MAX_X * MAX_Y))
+
+
+    sys.exit(0)
+
 if __name__ == '__main__':
 
+
+    #peppermint()
 
     screen = init_screen()
 
